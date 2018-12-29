@@ -1,7 +1,7 @@
 = content title
   | Index
 = content main
-  h1 Latest Traces
+  h1 Latest Accounts
   hr
 
   = include _latest .Latest

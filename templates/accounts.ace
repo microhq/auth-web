@@ -1,14 +1,10 @@
 = content title
-  | Results
+  | Accounts
 = content main
-  h1 Results
+  h1 Accounts
   hr
 
-  {{if .Results}}
-  = include _latest .Results
-  {{else}}
-  h4 No results found
-  {{end}}
+  = include _latest .Accounts
 
   div.row
     div.col-md-12

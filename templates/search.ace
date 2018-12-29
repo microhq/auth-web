@@ -1,24 +1,18 @@
 = content title
   | Search
 = content main
-  h1 Search Traces
+  h1 Search Accounts
   hr
 
   div.row
     div.col-md-6
       form method=POST
         div.form-group
-          label Lookup Trace by ID
-          input.form-control type=text id=id name=id placeholder="Trace ID"
+          label Client ID
+          input.form-control type=text id=id name=id placeholder="Client ID"
+        div.form-group
+          label Account Type
+          input.form-control type=text id=type name=type placeholder="Account Type"
         div.form-group
           button.btn.btn-default type=submit Go
-
-  div.row
-    div.col-md-6
-      form method=POST
-        div.form-group
-          label Lookup Trace by Name
-          input.form-control type=text id=q name=q placeholder="Name"
-        div.form-group
-          button.btn.btn-default type=submit Search
 

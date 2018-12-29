@@ -14,71 +14,27 @@ import (
 	"github.com/yosssi/ace"
 	"golang.org/x/net/context"
 
-	proto "github.com/micro/go-platform/trace/proto"
-	"github.com/micro/trace-srv/proto/trace"
+	//proto "github.com/micro/go-platform/auth/proto"
+	account "github.com/micro/auth-srv/proto/account"
 )
 
 var (
 	opts        *ace.Options
-	traceClient trace.TraceClient
+	accClient account.AccountClient
 )
 
-func Init(dir string, t trace.TraceClient) {
-	traceClient = t
+func Init(dir string, t account.AccountClient) {
+	accClient = t
 
 	opts = ace.InitializeOptions(nil)
 	opts.BaseDir = dir
 	opts.DynamicReload = true
 	opts.FuncMap = template.FuncMap{
-		"Data": func(spans []*proto.Span) string {
-			b, _ := json.Marshal(spans)
-			return string(b)
-		},
-		"Delta": func(i int, a []*proto.Annotation) string {
-			if i == 0 {
-				return "0ms"
-			}
-			j := a[i].Timestamp
-			k := a[i-1].Timestamp
-			return fmt.Sprintf("%.3fms", float64(j-k)/1000.0)
-		},
-		"Duration": func(t int64) string {
-			return fmt.Sprintf("%.3fms", float64(t)/1000.0)
-		},
-		"Offset": func(t int64, s []*proto.Span) string {
-			d := t - s[0].Timestamp
-			if d == 0 {
-				return "0px"
-			}
-			w := float64(d) / float64(s[0].Duration)
-			if w > 0.7 {
-				w = 0.7
-			}
-			return fmt.Sprintf("%.0f%%", w*100)
-		},
-		"Service": func(s *proto.Service) string {
-			if s == nil {
-				return "n/a"
-			}
-			return s.Name
-		},
-		"Scale": func(t int64, s []*proto.Span) string {
-			if len(s) == 0 {
-				return "100%"
-			}
-
-			w := float64(t) / float64(s[0].Duration)
-
-			return fmt.Sprintf("%.0f%%", w*100)
-		},
 		"TimeAgo": func(t int64) string {
 			return timeAgo(t)
 		},
 		"Timestamp": func(t int64) string {
-			return time.Unix(t/1e6, 0).Format("02 Jan 06 15:04:05 MST")
-		},
-		"Colour": func(s string) string {
-			return colour(s)
+			return time.Unix(t, 0).Format("02 Jan 06 15:04:05 MST")
 		},
 	}
 }
@@ -97,6 +53,12 @@ func render(w http.ResponseWriter, r *http.Request, tmpl string, data map[string
 		return
 	}
 
+        if data == nil {
+                data = make(map[string]interface{})
+        }
+
+        data["Alert"] = getAlert(w, r)
+
 	if err := tpl.Execute(w, data); err != nil {
 		fmt.Println(err)
 		http.Redirect(w, r, "/", 302)
@@ -105,29 +67,22 @@ func render(w http.ResponseWriter, r *http.Request, tmpl string, data map[string
 
 // The index page
 func Index(w http.ResponseWriter, r *http.Request) {
-	rsp, err := traceClient.Search(context.TODO(), &trace.SearchRequest{
-		Reverse: true,
+	rsp, err := accClient.Search(context.TODO(), &account.SearchRequest{
+//		Reverse: true,
 	})
 	if err != nil {
 		http.Redirect(w, r, "/", 302)
 		return
 	}
 
-	sort.Sort(sortedSpans{spans: rsp.Spans, reverse: false})
-
-	for _, span := range rsp.Spans {
-		if len(span.Annotations) == 0 {
-			continue
-		}
-		sort.Sort(sortedAnns{span.Annotations})
-	}
+	sort.Sort(sortedRecords{records: rsp.Accounts, reverse: true})
 
 	render(w, r, "index", map[string]interface{}{
-		"Latest": rsp.Spans,
+		"Latest": rsp.Accounts,
 	})
 }
 
-func Latest(w http.ResponseWriter, r *http.Request) {
+func Accounts(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 
 	limit := 15
@@ -142,8 +97,8 @@ func Latest(w http.ResponseWriter, r *http.Request) {
 
 	offset := (page * limit) - limit
 
-	rsp, err := traceClient.Search(context.TODO(), &trace.SearchRequest{
-		Reverse: true,
+	rsp, err := accClient.Search(context.TODO(), &account.SearchRequest{
+//		Reverse: true,
 		Limit:   int64(limit),
 		Offset:  int64(offset),
 	})
@@ -153,7 +108,7 @@ func Latest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var less, more int
-	if len(rsp.Spans) == limit {
+	if len(rsp.Accounts) == limit {
 		more = page + 1
 	}
 
@@ -161,17 +116,10 @@ func Latest(w http.ResponseWriter, r *http.Request) {
 		less = page - 1
 	}
 
-	sort.Sort(sortedSpans{spans: rsp.Spans, reverse: false})
+	sort.Sort(sortedRecords{records: rsp.Accounts, reverse: false})
 
-	for _, span := range rsp.Spans {
-		if len(span.Annotations) == 0 {
-			continue
-		}
-		sort.Sort(sortedAnns{span.Annotations})
-	}
-
-	render(w, r, "latest", map[string]interface{}{
-		"Latest": rsp.Spans,
+	render(w, r, "accounts", map[string]interface{}{
+		"Accounts": rsp.Accounts,
 		"Less":   less,
 		"More":   more,
 	})
@@ -181,30 +129,21 @@ func Search(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" {
 		r.ParseForm()
 		id := r.Form.Get("id")
-
-		if len(id) > 0 {
-			http.Redirect(w, r, filepath.Join(hostPath(r), "trace/"+id), 302)
-			return
-		}
-
-		q := r.Form.Get("q")
-
-		if len(q) == 0 {
-			http.Redirect(w, r, filepath.Join(hostPath(r), "search"), 302)
-			return
-		}
-
-		rsp, err := traceClient.Search(context.TODO(), &trace.SearchRequest{
-			Name:    q,
-			Reverse: true,
+		typ := r.Form.Get("type")
+		rsp, err := accClient.Search(context.TODO(), &account.SearchRequest{
+			ClientId: id,
+			Type: typ,
+//			Reverse: true,
 		})
 		if err != nil {
 			http.Redirect(w, r, filepath.Join(hostPath(r), "search"), 302)
 			return
 		}
+
+		sort.Sort(sortedRecords{records: rsp.Accounts, reverse: false})
+
 		render(w, r, "results", map[string]interface{}{
-			"Name":    q,
-			"Results": rsp.Spans,
+			"Results": rsp.Accounts,
 		})
 
 		return
@@ -212,7 +151,75 @@ func Search(w http.ResponseWriter, r *http.Request) {
 	render(w, r, "search", map[string]interface{}{})
 }
 
-func Trace(w http.ResponseWriter, r *http.Request) {
+func DeleteAccount(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "POST" {
+		vars := mux.Vars(r)
+		id := vars["id"]
+		if len(id) == 0 {
+			return
+		}
+		_, err := accClient.Delete(context.TODO(), &account.DeleteRequest{
+			Id: id,
+		})
+		if err != nil {
+			setAlert(w, r, err.Error(), "error")
+			http.Redirect(w, r, r.Referer(), 302)
+			return
+		}
+		http.Redirect(w, r, r.Referer(), 302)
+	}
+}
+
+func EditAccount(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+
+	if r.Method == "POST" {
+		r.ParseForm()
+
+		typ := r.Form.Get("type")
+		clientId := r.Form.Get("client_id")
+		clientSecret := r.Form.Get("client_secret")
+
+		var metadata map[string]string
+
+		json.Unmarshal([]byte(r.Form.Get("metadata")), &metadata)
+
+		_, err := accClient.Update(context.TODO(), &account.UpdateRequest{
+			Account: &account.Record{
+				Id: id,
+				Type: typ,
+				ClientId: clientId,
+				ClientSecret: clientSecret,
+				Metadata: metadata,
+			},
+		})
+
+		if err != nil {
+			setAlert(w, r, err.Error(), "error")
+			http.Redirect(w, r, r.Referer(), 302)
+			return
+		}
+
+		http.Redirect(w, r, r.Referer(), 302)
+		return
+	}
+
+	rsp, err := accClient.Read(context.TODO(), &account.ReadRequest{
+		Id: id,
+	})
+	if err != nil {
+		http.Redirect(w, r, r.Referer(), 302)
+		return
+	}
+
+	render(w, r, "editAccount", map[string]interface{}{
+		"Account": rsp.Account,
+	})
+}
+/*
+
+func Auth(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 
@@ -221,7 +228,7 @@ func Trace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// TODO: limit/offset
-	rsp, err := traceClient.Read(context.TODO(), &trace.ReadRequest{
+	rsp, err := authClient.Read(context.TODO(), &auth.ReadRequest{
 		Id: id,
 	})
 	if err != nil {
@@ -238,8 +245,9 @@ func Trace(w http.ResponseWriter, r *http.Request) {
 		sort.Sort(sortedAnns{span.Annotations})
 	}
 
-	render(w, r, "trace", map[string]interface{}{
+	render(w, r, "auth", map[string]interface{}{
 		"Id":    id,
 		"Spans": rsp.Spans,
 	})
 }
+*/

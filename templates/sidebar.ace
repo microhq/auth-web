@@ -2,6 +2,6 @@ ul.nav.nav-sidebar
   li.h4
     a href={{URL "/"}} Home
   li
-    a href={{URL "search"}} Search
+    a href={{URL "accounts"}} Accounts
   li
-    a href={{URL "latest"}} Latest
+    a href={{URL "search"}} Search

@@ -5,7 +5,7 @@ html lang=en
     meta http-equiv="X-UA-Compatible" content="IE=edge"
     meta name="viewport" content="width=device-width, initial-scale=1"
     title
-      | Micro Trace - 
+      | Micro Auth - 
       = yield title
     link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css" integrity="sha512-dTfge/zgoMYpP7QbHy4gWMEGsbsdZeCXz7irItjcC3sPUFtf0kuFbDz/ixG7ArTxmDjLXDmezHubeNikyKGVyQ==" crossorigin="anonymous"
     = css
@@ -25,12 +25,23 @@ html lang=en
             span.icon-bar
             span.icon-bar
             span.icon-bar
-          a.navbar-brand href={{URL "/"}} <b>Micro Trace</b>
+          a.navbar-brand href={{URL "/"}} <b>Micro Auth</b>
     div.container-fluid
       div.row 
         div.col-md-2
           = include sidebar
         div.col-md-10
+          = include _alert .Alert
           = yield main
     script src=https://ajax.googleapis.com/ajax/libs/jquery/2.2.0/jquery.min.js
+    script src=https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js
     = yield js
+    = javascript
+      function c() {
+        var r = window.confirm("Are you sure you?");
+        if (r == true) {
+          return true;
+        } else {
+          return false;
+        };
+      };

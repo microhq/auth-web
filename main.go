@@ -3,13 +3,13 @@ package main
 import (
 	"github.com/micro/go-micro/client"
 	"github.com/micro/go-web"
-	"github.com/micro/trace-srv/proto/trace"
-	"github.com/micro/trace-web/handler"
+	proto "github.com/micro/auth-srv/proto/account"
+	"github.com/micro/auth-web/handler"
 )
 
 func main() {
 	service := web.NewService(
-		web.Name("go.micro.web.trace"),
+		web.Name("go.micro.web.auth"),
 		web.Handler(handler.Router()),
 	)
 
@@ -17,7 +17,7 @@ func main() {
 
 	handler.Init(
 		"templates",
-		trace.NewTraceClient("go.micro.srv.trace", client.DefaultClient),
+		proto.NewAccountClient("go.micro.srv.auth", client.DefaultClient),
 	)
 
 	service.Run()

@@ -1,0 +1,19 @@
+= content title
+  | Edit Account
+= content main
+  h1 Edit Account
+
+  div.row
+    div.col-md-6
+      form method=POST
+        div.form-group
+          label Client ID
+          input.form-control type=text id=client_id name=client_id placeholder="Client ID" value={{.Account.ClientId}}
+        div.form-group
+          label Client Secret
+          input.form-control type=password id=client_secret name=client_secret placeholder="Client Secret" value={{.Account.ClientSecret}}
+        div.form-group
+          label Type
+          input.form-control type=text id=type name=type placeholder="Type e.g. user" value={{.Account.Type}}
+        div.form-group
+          button.btn.btn-default type=submit Update

@@ -2,56 +2,44 @@ package handler
 
 import (
 	"fmt"
-	"hash/crc32"
 	"net/http"
 	"time"
 
 	"github.com/gorilla/mux"
-	proto "github.com/micro/go-platform/trace/proto"
+	"github.com/gorilla/sessions"
+	proto "github.com/micro/auth-srv/proto/account"
 )
+
+const (
+	alertId = "_ar"
+)
+
+type Alert struct {
+	Type, Message string
+}
 
 var (
-	colours = []string{"blue", "green", "yellow", "purple", "orange"}
+	store = sessions.NewCookieStore([]byte("auth"))
 )
 
-type sortedSpans struct {
-	spans   []*proto.Span
+type sortedRecords struct {
+	records   []*proto.Record
 	reverse bool
 }
 
-type sortedAnns struct {
-	anns []*proto.Annotation
+func (s sortedRecords) Len() int {
+	return len(s.records)
 }
 
-func (s sortedSpans) Len() int {
-	return len(s.spans)
-}
-
-func (s sortedSpans) Less(i, j int) bool {
+func (s sortedRecords) Less(i, j int) bool {
 	if s.reverse {
-		return s.spans[i].Timestamp < s.spans[j].Timestamp
+		return s.records[i].Created > s.records[j].Created
 	}
-	return s.spans[i].Timestamp > s.spans[j].Timestamp
+	return s.records[i].Created < s.records[j].Created
 }
 
-func (s sortedSpans) Swap(i, j int) {
-	s.spans[i], s.spans[j] = s.spans[j], s.spans[i]
-}
-
-func (s sortedAnns) Len() int {
-	return len(s.anns)
-}
-
-func (s sortedAnns) Less(i, j int) bool {
-	return s.anns[i].Timestamp < s.anns[j].Timestamp
-}
-
-func (s sortedAnns) Swap(i, j int) {
-	s.anns[i], s.anns[j] = s.anns[j], s.anns[i]
-}
-
-func colour(s string) string {
-	return colours[crc32.ChecksumIEEE([]byte(s))%uint32(len(colours))]
+func (s sortedRecords) Swap(i, j int) {
+	s.records[i], s.records[j] = s.records[j], s.records[i]
 }
 
 func distanceOfTime(minutes float64) string {
@@ -81,6 +69,38 @@ func distanceOfTime(minutes float64) string {
 	return ""
 }
 
+func getAlert(w http.ResponseWriter, r *http.Request) *Alert {
+	sess, err := store.Get(r, alertId)
+	if err != nil {
+		return nil
+	}
+	defer sess.Save(r, w)
+
+	for _, i := range []string{"info", "error", "success"} {
+		f := sess.Flashes(i)
+		if f != nil {
+			if i == "error" {
+				i = "danger"
+			}
+
+			return &Alert{
+				Type:    i,
+				Message: f[0].(string),
+			}
+		}
+	}
+	return nil
+}
+
+func setAlert(w http.ResponseWriter, r *http.Request, msg string, typ string) {
+	sess, err := store.Get(r, alertId)
+	if err != nil {
+		return
+	}
+	sess.AddFlash(msg, typ)
+	sess.Save(r, w)
+}
+
 func timeAgo(t int64) string {
 	d := time.Unix(t, 0)
 	timeAgo := ""
@@ -105,8 +125,11 @@ func hostPath(r *http.Request) string {
 func Router() http.Handler {
 	r := mux.NewRouter()
 	r.HandleFunc("/", Index)
+	r.HandleFunc("/accounts", Accounts)
 	r.HandleFunc("/search", Search)
-	r.HandleFunc("/latest", Latest)
-	r.HandleFunc("/trace/{id}", Trace)
+	r.HandleFunc("/delete/account/{id}", DeleteAccount)
+	r.HandleFunc("/edit/account/{id}", EditAccount)
+//	r.HandleFunc("/latest", Latest)
+//	r.HandleFunc("/trace/{id}", Trace)
 	return r
 }
