@@ -2,6 +2,9 @@
 
 The auth web is a dashboard for the platform auth-srv. 
 
+## Dependence on Service
+- [auth-srv](https://github.com/microhq/auth-srv)
+
 ## Getting started
 
 1. Install Consul
